@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Oct 07 19:02 2021
+Created on Fri Oct 15 13:52 2021
 
-@author: Pedro Vieira @description: Settings for the DFFN training and testing
+@author: Pedro Vieira @description: Settings for the S-DMM training and testing
 """
 
 import shutil
@@ -11,7 +11,7 @@ import os
 import yaml
 
 
-class DFFNConfig:
+class SDMMConfig:
     def __init__(self, filename='config.yaml', test=False):
         # Load config
         with open(filename, "r") as file:
@@ -40,6 +40,7 @@ class DFFNConfig:
             self.weight_decay = float(cfg['weight_decay'])
             self.gamma = cfg['gamma']
             self.scheduler_step = cfg['scheduler_step']
+            self.feature_dimensions = cfg['feature_dimensions']
 
             # Other options
             self.results_folder = self.exec_folder + cfg['results_folder']
