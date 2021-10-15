@@ -6,13 +6,7 @@ Created on Mon Oct 22 12:38:20 2018
 @author: dengbin
 """
 
-import torch
-import torch.utils.data as Torchdata
-import numpy as np
-from tqdm import tqdm
-
-from tools import *
-from net import *
+from utils.tools import *
 
 # Parameters setting
 DATASET = 'PaviaU'  # PaviaU; Salinas; KSC

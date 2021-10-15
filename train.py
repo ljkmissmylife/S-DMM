@@ -6,17 +6,11 @@ Created on Mon Oct 22 12:38:20 2018
 @author: dengbin
 """
 
-import torch
-
-import torch.utils.data as Torchdata
 from torch.optim.lr_scheduler import StepLR
-import numpy as np
-from tqdm import tqdm
-from scipy import io
-import os
 
-from tools import *
-from net import *
+from utils.tools import *
+from net.encoder import CNNEncoder
+from net.relation import RelationNetwork
 
 # Parameters setting
 DATASET = 'PaviaU'  # PaviaU; KSC; Salinas
@@ -36,8 +30,41 @@ FEATURE_DIM = 64  # Hyperparameter: the number of convolutional filters
 GPU = 0  #
 
 
-##########TRAIN##################
+# Trains the multiple runs with the whole dataset
 def train():
+    cfg = DFFNConfig('config.yaml')
+
+    # Start tensorboard
+    writer = None
+    if cfg.use_tensorboard:
+        writer = SummaryWriter(cfg.tensorboard_folder)
+
+    # Load raw dataset, apply PCA and normalize dataset.
+    data = HSIData(cfg.dataset, cfg.data_folder, cfg.sample_bands)
+
+    # Load a checkpoint
+    if cfg.use_checkpoint:
+        print('Loading checkpoint')
+        value_states, train_states, best_model_state = load_checkpoint(cfg.checkpoint_folder,
+                                                                       cfg.checkpoint_file)
+        first_run, first_epoch, loss_state, correct_state = value_states
+        model_state, optimizer_state, scheduler_state = train_states
+        best_model, best_accuracy = best_model_state
+        if first_epoch == cfg.num_epochs - 1:
+            first_epoch = 0
+            first_run += 1
+        print(f'Loaded checkpoint with run {first_run} and epoch {first_epoch}')
+    else:
+        first_run, first_epoch, loss_state, correct_state = (0, 0, 0.0, 0)
+        model_state, optimizer_state, scheduler_state = None, None, None
+        best_model, best_accuracy = None, 0
+
+        # Save data for tests if we are not loading a checkpoint
+        data.save_data(cfg.exec_folder)
+
+    # Run training
+    print(f'Starting experiment with {cfg.num_runs} run' + ('s' if cfg.num_runs > 1 else ''))
+
     # datasets prepare
     ''' img: array 3D; gt: array 2D;'''
     img, gt, LABEL_VALUES, IGNORED_LABELS, RGB_BANDS, palette = get_dataset(DATASET, FOLDER)
