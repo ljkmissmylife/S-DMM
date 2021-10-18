@@ -277,7 +277,7 @@ def train():
             io.savemat(loss_file, {'losses': losses, 'accuracy': OA})
 
 
-#############################################################################
+# Main function for running the train independently
 def main():
     train()
 
