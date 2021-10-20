@@ -15,6 +15,7 @@ from utils.config import SDMMConfig
 from utils.dataset import SDMMDataset
 from net.encoder import CNNEncoder
 from net.relation import RelationNetwork
+from test import test_models
 
 # Import tensorboard
 from torch.utils.tensorboard import SummaryWriter
@@ -49,7 +50,7 @@ def train():
     else:
         first_run, first_epoch, loss_state, correct_state = (0, 0, 0.0, 0)
         model_state, optimizer_state, scheduler_state = None, None, None
-        best_models_dict = {'encoder': None, 'relation': None, 'accuracy': None}
+        best_models_dict = {'encoder': None, 'relation': None, 'accuracy': 0.0}
 
         # Save data for tests if we are not loading a checkpoint
         data.save_data(cfg.exec_folder)
@@ -120,7 +121,7 @@ def train():
 
             # Run iterations
             for i, (images, labels) in tqdm(enumerate(train_loader), total=len(train_loader)):
-                half_set = cfg.train_batch_size // 2 if len(labels) == cfg.train_batch_size else len(labels) // 2
+                half_set = len(labels) // 2
                 rest_set = len(labels) - half_set
                 images1 = images[:half_set, :, :, :].to(device)
                 images2 = images[half_set:, :, :, :].to(device)
@@ -131,8 +132,7 @@ def train():
 
                 # Create matrix of feature maps for comparing all sample combinations
                 features1_ext = features1.unsqueeze(1).repeat(1, rest_set, 1, 1, 1)
-                features2_ext = features2.unsqueeze(1).repeat(1, half_set, 1, 1, 1)
-                features2_ext = torch.transpose(features2_ext, 0, 1)
+                features2_ext = features2.unsqueeze(0).repeat(half_set, 1, 1, 1, 1)
 
                 # Concatenate pairs of samples and apply relation network
                 relation_pairs = torch.cat((features1_ext, features2_ext), 2).view(-1, cfg.feature_dimensions * 2,
@@ -155,7 +155,8 @@ def train():
 
                 # Compute iteration accuracy and loss for later reporting
                 running_loss += loss.item()
-                num_correct = ((relations - label_relations).square() < 0.25).sum().item()
+                predicted = (relations > cfg.test_threshold).int()
+                num_correct = (predicted == label_relations).int().sum().item()
                 running_correct += num_correct / (relations.shape[0] * relations.shape[1])
 
                 # Print steps and loss every 'print_frequency'
@@ -185,8 +186,7 @@ def train():
                 # Set models to eval mode
                 encoder_model.eval()
                 relation_model.eval()
-                # TODO: Implement validation
-                report = test_models(encoder_model, relation_model, val_loader, writer)
+                report = test_models(encoder_model, relation_model, val_loader, cfg.test_threshold)
                 encoder_model.train()
                 relation_model.train()
 
