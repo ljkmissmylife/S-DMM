@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Oct 22 12:38:20 2018
+Created on Wed Oct 20 11:36 2021
 
-@author: dengbin
+@author: Pedro Vieira
 """
 
 import torch
@@ -22,7 +22,7 @@ from tqdm import tqdm
 class HSIData:
     """Stores dataset raw image and labels and applies pre-processing"""
 
-    def __init__(self, dataset_name, target_folder='./datasets/', num_bands=5):
+    def __init__(self, dataset_name, target_folder='./datasets/'):
         self.dataset_name = dataset_name
         folder = target_folder + dataset_name + '/'
 
@@ -70,17 +70,16 @@ class HSIData:
         self.ignored_labels = list(set(ignored_labels))
 
         image = np.asarray(img, dtype='float32')
-
-        assert num_bands < image.shape[2], 'The amount of bands should be smaller than the number image channels'
         image_height, image_width, image_bands = image.shape
         flat_image = np.reshape(image, (image_height * image_width, image_bands))
+        self.image_bands = image_bands
 
         # Normalize data
         sca1 = StandardScaler()
         sca1.fit(flat_image)
         norm_img = sca1.transform(flat_image)  # Range [-1, 1]
         norm_img = (norm_img + 1) / 2  # Set image to the range [0, 1]
-        self.image = np.reshape(norm_img, (image_height, image_width, num_bands))
+        self.image = np.reshape(norm_img, (image_height, image_width, image_bands))
 
     # Split ground-truth pixels into train, test, val
     def sample_dataset(self, train_size=0.8, val_size=0.1, max_train_samples=None):
@@ -172,11 +171,9 @@ def load_checkpoint(checkpoint_folder, file):
     scheduler_state = loaded_checkpoint['scheduler_state']
     train_states = (model_state, optimizer_state, scheduler_state)
 
-    # Load best model record
-    best_model = loaded_checkpoint['best_model']
-    best_accuracy = loaded_checkpoint['best_accuracy']
-    best_model_state = (best_model, best_accuracy)
-    return values_state, train_states, best_model_state
+    # Load best models record
+    best_models_dict = loaded_checkpoint['best_models_dict']
+    return values_state, train_states, best_models_dict
 
 
 def save_results(filename, report, run, epoch=-1, validation=False):
@@ -229,21 +226,12 @@ def weights_init(m):
         pass
 
 
-# Generator function.
-# TODO: remove this function and its uses
-class ConditionalGpuContext:
-    def __init__(self, gpu_device):
-        self.gpu = gpu_device
-        self.is_available = torch.cuda.is_available()
-        if self.is_available:
-            self.device = torch.cuda.device(self.gpu)
-        else:
-            self.device = None
-
-    def __enter__(self):
-        if self.is_available:
-            self.device.__enter__()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.is_available:
-            self.device.__exit__(self, exc_type, exc_val, exc_tb)
+# Creates matrix of label relations based on two vectors
+def get_label_relations(labels1, labels2):
+    length1, length2 = len(labels1.squeeze()), len(labels2.squeeze())
+    relations = torch.zeros([length1, length2])
+    for i, label1 in enumerate(labels1):
+        for j, label2 in enumerate(labels2):
+            if label1 == label2:
+                relations[i, j] = 1
+    return relations
