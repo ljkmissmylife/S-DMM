@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Oct 22 12:38:20 2018
+Created on Wed Oct 20 11:36 2021
 
-@author: dengbin
+@author: Pedro Vieira
 """
 
 import torch.nn as nn
@@ -22,22 +22,6 @@ from torch.utils.tensorboard import SummaryWriter
 # Device configuration
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Parameters setting
-DATASET = 'PaviaU'  # PaviaU; KSC; Salinas
-SAMPLE_ALREADY = False  # whether randomly generated training samples are ready
-N_RUNS = 2  # the runing times of the experiments
-SAMPLE_SIZE = 10  # training samples per class
-BATCH_SIZE_PER_CLASS = SAMPLE_SIZE // 2  # batch size of each class
-PATCH_SIZE = 5  # Hyperparameter: patch size
-FLIP_ARGUMENT = False  # whether need data argumentation of flipping data; default: False
-ROTATED_ARGUMENT = False  # whether need data argumentation of rotated data; default: False
-ITER_NUM = 1000  # the total number of training iter; default: 50000
-TEST_NUM = 5  # the total number of test in the training process
-SAMPLING_MODE = 'fixed_withone'  # fixed number for each class
-FOLDER = './Datasets/'  # the dataset folder
-LEARNING_RATE = 0.1  # 0.01 good / 0.1 fast for SGD; 0.001 for Adam
-FEATURE_DIM = 64  # Hyperparameter: the number of convolutional filters
-
 
 # Trains the multiple runs with the whole dataset
 def train():
@@ -49,16 +33,15 @@ def train():
         writer = SummaryWriter(cfg.tensorboard_folder)
 
     # Load raw dataset, apply PCA and normalize dataset.
-    data = HSIData(cfg.dataset, cfg.data_folder, cfg.sample_bands)
+    data = HSIData(cfg.dataset, cfg.data_folder)
 
     # Load a checkpoint
     if cfg.use_checkpoint:
         print('Loading checkpoint')
-        value_states, train_states, best_model_state = load_checkpoint(cfg.checkpoint_folder,
+        value_states, train_states, best_models_dict = load_checkpoint(cfg.checkpoint_folder,
                                                                        cfg.checkpoint_file)
         first_run, first_epoch, loss_state, correct_state = value_states
         model_state, optimizer_state, scheduler_state = train_states
-        best_model, best_accuracy = best_model_state
         if first_epoch == cfg.num_epochs - 1:
             first_epoch = 0
             first_run += 1
@@ -66,7 +49,7 @@ def train():
     else:
         first_run, first_epoch, loss_state, correct_state = (0, 0, 0.0, 0)
         model_state, optimizer_state, scheduler_state = None, None, None
-        best_model, best_accuracy = None, 0
+        best_models_dict = {'encoder': None, 'relation': None, 'accuracy': None}
 
         # Save data for tests if we are not loading a checkpoint
         data.save_data(cfg.exec_folder)
@@ -83,31 +66,6 @@ def train():
         else:
             train_gt, _, val_gt = HSIData.load_samples(cfg.split_folder, cfg.train_split, cfg.val_split, run)
 
-        # for test
-        # train_dataset = HyperX(img, train_gt, DATASET, PATCH_SIZE, False, False)
-        # train_loader = Torchdata.DataLoader(train_dataset,
-        #                                     batch_size=N_CLASSES * SAMPLE_SIZE,
-        #                                     shuffle=False)
-        # tr_data, tr_labels = train_loader.__iter__().next()
-        # if torch.cuda.is_available():
-        #     tr_data, tr_labels = tr_data.cuda(GPU), tr_labels.cuda(GPU)
-
-        # test_dataset = HyperX(img, test_gt, DATASET, PATCH_SIZE, False, False)
-        # test_loader = Torchdata.DataLoader(test_dataset,
-        #                                    batch_size=1,
-        #                                    shuffle=False)
-
-        # USED IN THE ACTUAL TRAINING
-        # task_train_dataset.resetGt(task_train_gt)
-        # task_train_loader = Torchdata.DataLoader(task_train_dataset,
-        #                                          batch_size=N_CLASSES,
-        #                                          shuffle=False)
-        # task test
-        # task_test_dataset.resetGt(task_test_gt)
-        # task_test_loader = Torchdata.DataLoader(task_test_dataset,
-        #                                         batch_size=N_CLASSES * BATCH_SIZE_PER_CLASS,
-        #                                         shuffle=True)
-
         # Create train and test dataset objects
         train_dataset = SDMMDataset(data.image, train_gt, cfg.sample_size, data_augmentation=True)
         val_dataset = SDMMDataset(data.image, val_gt, cfg.sample_size, data_augmentation=False)
@@ -117,9 +75,10 @@ def train():
         val_loader = DataLoader(val_dataset, batch_size=cfg.test_batch_size, shuffle=False)
 
         # Initialize neural networks
-        encoder_model = CNNEncoder(cfg.sample_bands, cfg.feature_dimensions)
+        encoder_model = CNNEncoder(data.image_bands, cfg.feature_dimensions)
         relation_model = RelationNetwork(cfg.sample_size, cfg.feature_dimensions)
 
+        # Initialize weights
         encoder_model.apply(weights_init)
         relation_model.apply(weights_init)
 
@@ -131,18 +90,6 @@ def train():
 
         relation_opt = torch.optim.SGD(relation_model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
         relation_lrs = StepLR(relation_opt, step_size=cfg.scheduler_step, gamma=cfg.gamma)
-
-        # training
-        OA = np.zeros(TEST_NUM)
-        oa_iter = 0
-        test_iter = ITER_NUM // TEST_NUM
-        display_iter = 10
-        losses = np.zeros(ITER_NUM + 1)
-        mean_losses = np.zeros(ITER_NUM + 1)
-
-        # init torch data
-        # task_train_dataset = HyperX(img, train_gt, DATASET, PATCH_SIZE, FLIP_ARGUMENT, ROTATED_ARGUMENT)
-        # task_test_dataset = HyperX(img, train_gt, DATASET, PATCH_SIZE, FLIP_ARGUMENT, ROTATED_ARGUMENT)
 
         # Start counting loss and correct predictions
         running_loss = 0.0
@@ -164,6 +111,7 @@ def train():
             running_correct = correct_state
 
         # Run epochs
+        criterion = criterion.to(device)
         encoder_model = encoder_model.to(device)
         relation_model = relation_model.to(device)
         total_steps = len(train_loader)
@@ -172,36 +120,27 @@ def train():
 
             # Run iterations
             for i, (images, labels) in tqdm(enumerate(train_loader), total=len(train_loader)):
-                # for iter_ in tqdm(range(1, ITER_NUM + 1), desc='Training the network'):
-                # images, labels = task_train_loader.__iter__().next()
-                images = images.to(device)
-                labels = labels.to(device)
+                half_set = cfg.train_batch_size // 2 if len(labels) == cfg.train_batch_size else len(labels) // 2
+                rest_set = len(labels) - half_set
+                images1 = images[:half_set, :, :, :].to(device)
+                images2 = images[half_set:, :, :, :].to(device)
 
                 # Calculate features with encoder
-                encoder_model.train()
-                relation_model.train()
+                features1 = encoder_model(images1)
+                features2 = encoder_model(images2)
 
-                sample_features = encoder_model(images)
-                batch_features = encoder_model(batches)  # Why?
+                # Create matrix of feature maps for comparing all sample combinations
+                features1_ext = features1.unsqueeze(1).repeat(1, rest_set, 1, 1, 1)
+                features2_ext = features2.unsqueeze(1).repeat(1, half_set, 1, 1, 1)
+                features2_ext = torch.transpose(features2_ext, 0, 1)
 
-                # calculate relations
-                # Really, why???
-                # TODO: Figure this out
-                sample_features_ext = sample_features.unsqueeze(0).repeat(N_CLASSES * BATCH_SIZE_PER_CLASS, 1, 1, 1, 1)
-                batch_features_ext = batch_features.unsqueeze(0).repeat(N_CLASSES, 1, 1, 1, 1)
-                batch_features_ext = torch.transpose(batch_features_ext, 0, 1)
-                relation_pairs = torch.cat((sample_features_ext, batch_features_ext), 2).view(-1, FEATURE_DIM * 2,
-                                                                                              PATCH_SIZE, PATCH_SIZE)
-                relations = relation_model(relation_pairs).view(-1, N_CLASSES)
+                # Concatenate pairs of samples and apply relation network
+                relation_pairs = torch.cat((features1_ext, features2_ext), 2).view(-1, cfg.feature_dimensions * 2,
+                                                                                   cfg.sample_size, cfg.sample_size)
+                relations = relation_model(relation_pairs).view(-1, rest_set)
 
-                one_hot_labels = torch.zeros(N_CLASSES * BATCH_SIZE_PER_CLASS, N_CLASSES).scatter_(1,
-                                                                                                   batch_labels.view(-1, 1),
-                                                                                                   1)
-
-                criterion = criterion.to(device)
-                one_hot_labels = one_hot_labels.to(device)
-
-                loss = criterion(relations, one_hot_labels)
+                label_relations = get_label_relations(labels[:half_set], labels[half_set:]).to(device)
+                loss = criterion(relations, label_relations)
 
                 # Backward and optimize
                 encoder_opt.zero_grad()
@@ -214,67 +153,87 @@ def train():
                 encoder_lrs.step()
                 relation_lrs.step()
 
-                # TODO: Continue here
-                losses[i] = loss.item()
-                mean_losses[i] = np.mean(losses[max(0, i - 10):i + 1])
-                if i % cfg.print_frequency == 0:
-                    string = 'Train (ITER_NUM {}/{})\tLoss: {:.6f}'
-                    string = string.format(
-                        i, ITER_NUM, mean_losses[i])
-                    tqdm.write(string)
+                # Compute iteration accuracy and loss for later reporting
+                running_loss += loss.item()
+                num_correct = ((relations - label_relations).square() < 0.25).sum().item()
+                running_correct += num_correct / (relations.shape[0] * relations.shape[1])
 
-                # # Testing
-                # if iter_ % test_iter == 0:
-                #     print('Testing...')
-                #     feature_encoder.eval()
-                #     relation_network.eval()
-                #     accuracy, total = 0., 0.
-                #     for batch_idx, (te_data, te_labels) in tqdm(enumerate(test_loader), total=len(test_loader)):
-                #         with torch.no_grad():
-                #             if torch.cuda.is_available():
-                #                 te_data, te_labels = te_data.cuda(GPU), te_labels.cuda(GPU)
-                #
-                #             tr_features = feature_encoder(tr_data)
-                #             te_features = feature_encoder(te_data)
-                #             tr_features_ext = tr_features.unsqueeze(0)
-                #             te_features_ext = te_features.unsqueeze(0).repeat(N_CLASSES * SAMPLE_SIZE, 1, 1, 1, 1)
-                #             te_features_ext = torch.transpose(te_features_ext, 0, 1)
-                #             trte_pairs = torch.cat((tr_features_ext, te_features_ext), 2).view(-1, FEATURE_DIM * 2,
-                #                                                                                PATCH_SIZE, PATCH_SIZE)
-                #             trte_relations = relation_network(trte_pairs).view(-1, SAMPLE_SIZE)
-                #             # scores = torch.mean(trte_relations,dim=1)
-                #             scores, _ = torch.max(trte_relations, dim=1)
-                #             _, output = torch.max(scores, dim=0)
-                #             accuracy += output.item() == te_labels.item()
-                #             total += 1
-                #     rate = accuracy / total
-                #     OA[oa_iter] = rate
-                #     oa_iter += 1
-                #     print('Accuracy:', rate)
-                #     # save networks
-                #     save_encoder = 'Bing_Encoder'
-                #     save_relation = 'Bing_Relation'
-                #
-                #     with ConditionalGpuContext(GPU):
-                #         save_model(feature_encoder, save_encoder, train_loader.dataset.name, sample_size=SAMPLE_SIZE,
-                #                    run=run, epoch=iter_, metric=rate)
-                #         save_model(relation_network, save_relation, train_loader.dataset.name, sample_size=SAMPLE_SIZE,
-                #                    run=run, epoch=iter_, metric=rate)
-                #         if iter_ == ITER_NUM:
-                #             model_encoder_dir = './checkpoints/' + save_encoder + '/' + train_loader.dataset.name + '/'
-                #             model_relation_dir = './checkpoints/' + save_relation + '/' + train_loader.dataset.name + '/'
-                #             model_encoder_file = model_encoder_dir + 'non_augmentation_sample{}_run{}.pth'.format(
-                #                 SAMPLE_SIZE, run)
-                #             model_relation_file = model_relation_dir + 'non_augmentation_sample{}_run{}.pth'.format(
-                #                 SAMPLE_SIZE, run)
-                #             torch.save(feature_encoder.state_dict(), model_encoder_file)
-                #             torch.save(relation_network.state_dict(), model_relation_file)
-            loss_dir = './results/losses/' + DATASET
-            if not os.path.isdir(loss_dir):
-                os.makedirs(loss_dir)
-            loss_file = loss_dir + '/' + 'sample' + str(SAMPLE_SIZE) + '_run' + str(run) + '_dim' + str(
-                FEATURE_DIM) + '.mat'
-            io.savemat(loss_file, {'losses': losses, 'accuracy': OA})
+                # Print steps and loss every 'print_frequency'
+                if (i + 1) % cfg.print_frequency == 0:
+                    avg_loss = running_loss / cfg.print_frequency
+                    accuracy = running_correct / cfg.print_frequency
+                    tqdm.write(
+                        f'\tEpoch [{epoch + 1}/{cfg.num_epochs}] Step [{i + 1}/{total_steps}]'
+                        f'\tLoss: {avg_loss:.5f}\tAccuracy: {accuracy:.5f}')
+                    running_loss = 0.0
+                    running_correct = 0
+
+                    # Compute intermediate results for visualization
+                    if writer is not None:
+                        # Write steps and loss every WRITE_FREQUENCY to tensorboard
+                        writer.add_scalar('Training loss', avg_loss, epoch * total_steps + i)
+                        writer.add_scalar('Accuracy', accuracy, epoch * total_steps + i)
+
+            # Reset loss and correct predictions
+            running_loss = 0.0
+            running_correct = 0
+
+            # Run validation
+            if cfg.val_split > 0:
+                print("STARTING VALIDATION {}/{}".format(epoch + 1, cfg.num_epochs))
+
+                # Set models to eval mode
+                encoder_model.eval()
+                relation_model.eval()
+                # TODO: Implement validation
+                report = test_models(encoder_model, relation_model, val_loader, writer)
+                encoder_model.train()
+                relation_model.train()
+
+                # Save validation results
+                filename = cfg.results_folder + 'validations.txt'
+                save_results(filename, report, run, epoch, validation=True)
+
+                if report['overall_accuracy'] > best_models_dict['accuracy']:
+                    best_models_dict['encoder'] = encoder_model.state_dict()
+                    best_models_dict['relation'] = relation_model.state_dict()
+                    best_models_dict['accuracy'] = report['overall_accuracy']
+
+            # Save checkpoint
+            checkpoint = {
+                'run': run,
+                'epoch': epoch,
+                'loss_state': running_loss,
+                'correct_state': running_correct,
+                'encoder_state': encoder_model.state_dict(),
+                'relation_state': relation_model.state_dict(),
+                'encoder_opt_state': encoder_opt.state_dict(),
+                'relation_opt_state': relation_opt.state_dict(),
+                'encoder_lrs_state': encoder_lrs.state_dict(),
+                'relation_lrs_state': relation_lrs.state_dict(),
+                'best_models_dict': best_models_dict
+            }
+            torch.save(checkpoint,
+                       cfg.checkpoint_folder + 'checkpoint_run_' + str(run) + '_epoch_' + str(
+                           epoch) + '.pth')
+
+        # Reset first epoch in case a checkpoint was loaded
+        first_epoch = 0
+
+        # Save trained model
+        # TODO: Save best models per run
+        encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
+        relation_file = cfg.exec_folder + 'sdmm_relation_run_' + str(run) + '.pth'
+        torch.save(encoder_model.state_dict(), encoder_file)
+        torch.save(relation_model.state_dict(), relation_file)
+        print(f'Finished training run {run + 1}')
+
+    # Save the best model
+    best_models_file = cfg.exec_folder + 'best_models.pth'
+    torch.save(best_models_dict, best_models_file)
+
+    if cfg.use_tensorboard:
+        writer.close()
 
 
 # Main function for running the train independently
