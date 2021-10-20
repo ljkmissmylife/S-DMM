@@ -14,7 +14,7 @@ import torch.nn as nn
 class CNNEncoder(nn.Module):
     """Deep Embedding Module"""
 
-    def __init__(self, input_channels, feature_dim=64):
+    def __init__(self, input_channels=103, feature_dim=64):
         super(CNNEncoder, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Conv2d(input_channels, feature_dim, kernel_size=1, padding=0),

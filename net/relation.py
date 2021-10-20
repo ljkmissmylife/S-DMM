@@ -14,7 +14,7 @@ import torch.nn as nn
 class RelationNetwork(nn.Module):
     """Deep Metric Module"""
 
-    def __init__(self, patch_size, feature_dim=64):
+    def __init__(self, sample_size=5, feature_dim=64):
         super(RelationNetwork, self).__init__()
         self.layer1 = nn.Sequential(
             nn.Conv2d(feature_dim * 2, feature_dim, kernel_size=1, padding=0),
@@ -24,7 +24,7 @@ class RelationNetwork(nn.Module):
             nn.Conv2d(feature_dim, feature_dim, kernel_size=1, padding=0),
             nn.BatchNorm2d(feature_dim, momentum=1, affine=True),
             nn.ReLU())
-        self.layer3 = nn.Conv2d(feature_dim, 1, kernel_size=patch_size, padding=0)
+        self.layer3 = nn.Conv2d(feature_dim, 1, kernel_size=sample_size, padding=0)
 
     def forward(self, x):
         out = self.layer1(x)
