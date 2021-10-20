@@ -40,6 +40,7 @@ class SDMMConfig:
             self.gamma = cfg['gamma']
             self.scheduler_step = cfg['scheduler_step']
             self.feature_dimensions = cfg['feature_dimensions']
+            self.test_threshold = cfg['test_threshold']
 
             # Other options
             self.results_folder = self.exec_folder + cfg['results_folder']
