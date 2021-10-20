@@ -16,7 +16,7 @@ import numpy as np
 class SDMMDataset(Dataset):
     """Dataset class based on PyTorch's"""
 
-    def __init__(self, data, gt, sample_size=23, data_augmentation=True):
+    def __init__(self, data, gt, sample_size=5, data_augmentation=True):
         super(SDMMDataset, self).__init__()
         self.sample_size = sample_size
         self.data_augmentation = data_augmentation
@@ -39,8 +39,10 @@ class SDMMDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, i):
-        x, y = self.indices[i]
         pad_size = self.sample_size // 2
+
+        # Get all index values
+        x, y = self.indices[i]
         x1, y1, x2, y2 = x - pad_size, y - pad_size, x + pad_size + 1, y + pad_size + 1
         data = self.data[x1:x2, y1:y2]
         label = self.label[x, y] - 1  # Subtract one to ignore label 0 (unlabeled)
@@ -77,106 +79,3 @@ class SDMMDataset(Dataset):
             data = np.rot90(data, 3)
 
         return data
-
-
-# Original S-DMM Dataset
-class HyperX(torch.utils.data.Dataset):
-
-    def __init__(self, data, gt, dataset_name, patch_size=5, flip_argument=True, rotated_argument=True):
-        super(HyperX, self).__init__()
-        self.data = data
-        self.label = gt
-        self.patch_size = patch_size
-        self.flip_augmentation = flip_argument
-        self.rotated_augmentation = rotated_argument
-        self.name = dataset_name
-
-        p = self.patch_size // 2
-        # add padding
-        if self.patch_size > 1:
-            self.data = np.pad(self.data, ((p, p), (p, p), (0, 0)), mode='constant')
-            self.label = np.pad(self.label, p, mode='constant')
-        else:
-            self.flip_argument = False
-            self.rotated_argument = False
-        self.indices = []
-        for c in np.unique(self.label):
-            if c == 0:
-                continue
-            c_indices = np.nonzero(self.label == c)
-            X = list(zip(*c_indices))
-            self.indices += X
-
-    def resetGt(self, gt):
-        self.label = gt
-        p = self.patch_size // 2
-        # add padding
-        if self.patch_size > 1:
-            self.label = np.pad(gt, p, mode='constant')
-
-        self.indices = []
-        for c in np.unique(self.label):
-            if c == 0:
-                continue
-            c_indices = np.nonzero(self.label == c)
-            X = list(zip(*c_indices))
-            self.indices += X
-
-    @staticmethod
-    def flip(*arrays):
-        # horizontal = np.random.random() > 0.5
-        vertical = np.random.random() > 0.5
-        # if horizontal:
-        # arrays = [np.fliplr(arr) for arr in arrays]
-        if vertical:
-            arrays = [np.flipud(arr) for arr in arrays]
-        return arrays
-
-    # dengbin
-    @staticmethod
-    def rotated(*arrays):
-        p = np.random.random()
-        if p < 0.25:
-            arrays = [np.rot90(arr) for arr in arrays]
-        elif p < 0.5:
-            arrays = [np.rot90(arr, 2) for arr in arrays]
-        elif p < 0.75:
-            arrays = [np.rot90(arr, 3) for arr in arrays]
-        else:
-            pass
-        return arrays
-
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, i):
-        x, y = self.indices[i]
-        x1, y1 = x - self.patch_size // 2, y - self.patch_size // 2
-        x2, y2 = x1 + self.patch_size, y1 + self.patch_size
-
-        data = self.data[x1:x2, y1:y2]
-        label = self.label[x1:x2, y1:y2]
-
-        if self.flip_augmentation and self.patch_size > 1:
-            # Perform data augmentation (only on 2D patches)
-            data, label = self.flip(data, label)
-        if self.rotated_augmentation and self.patch_size > 1:
-            # Perform data rotated augmentation (only on 2D patches) #dengbin 20181018
-            data, label = self.rotated(data, label)
-
-        data = np.asarray(np.copy(data).transpose((2, 0, 1)), dtype='float32')
-        label = np.asarray(np.copy(label), dtype='int64')
-
-        # Load the data into PyTorch tensors
-        data = torch.from_numpy(data)
-        label = torch.from_numpy(label)
-
-        # Extract the center label if needed
-        if self.patch_size > 1:
-            label = label[self.patch_size // 2, self.patch_size // 2]
-        # Remove unused dimensions when we work with invidual spectrums
-        elif self.patch_size == 1:
-            # data = data[:, 0, 0]
-            label = label[0, 0]
-
-        return data, label - 1
