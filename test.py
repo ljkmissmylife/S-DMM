@@ -69,7 +69,7 @@ def test():
         relation_model = relation_model.to(device)
 
         # Test model from the current run
-        report = test_model(encoder_model, relation_model, test_loader, writer)
+        report = test_models(encoder_model, relation_model, test_loader, cfg.test_threshold)
         filename = cfg.results_folder + 'test.txt'
         save_results(filename, report, run)
 
@@ -77,146 +77,46 @@ def test():
         writer.close()
 
 
-# TODO: Adapt that function
 # Function for performing the tests for a given model and data loader
-def test_model(encoder_model, relation_model, loader, writer=None):
-    labels_pr = []
-    prediction_pr = []
+def test_models(encoder_model, relation_model, loader, threshold=0.5):
     with torch.no_grad():
         total_predicted = np.array([], dtype=int)
         total_labels = np.array([], dtype=int)
         for i, (images, labels) in tqdm(enumerate(loader), total=len(loader)):
-            # for images, labels in loader:
-            # Get input and compute model output
-            images = images.to(device)
-            labels = labels.to(device)
-            outputs = model(images)
+            # Divide input by two to create the comparison matrix
+            half_set = len(labels) // 2
+            rest_set = len(labels) - half_set
+            images1 = images[:half_set, :, :, :].to(device)
+            images2 = images[half_set:, :, :, :].to(device)
 
-            # Get predicted outputs
-            _, predicted = torch.max(outputs, 1)
+            # Calculate features with encoder
+            features1 = encoder_model(images1)
+            features2 = encoder_model(images2)
+
+            feature_dimensions = features1.shape[1]
+            sample_size = features1.shape[2]
+
+            # Create matrix of feature maps for comparing all sample combinations
+            features1_ext = features1.unsqueeze(1).repeat(1, rest_set, 1, 1, 1)
+            features2_ext = features2.unsqueeze(0).repeat(half_set, 1, 1, 1, 1)
+
+            # Concatenate pairs of samples and apply relation network
+            relation_pairs = torch.cat((features1_ext, features2_ext), 2).view(-1, feature_dimensions * 2,
+                                                                               sample_size, sample_size)
+            relations = relation_model(relation_pairs).squeeze()
+            predicted = (relations > threshold).int()
+            label_relations = get_label_relations(labels[:half_set], labels[half_set:]).view(-1, 1).squeeze().int()
 
             # Save total values for analysis
             total_predicted = np.append(total_predicted, predicted.cpu().numpy())
-            total_labels = np.append(total_labels, labels.cpu().numpy())
+            total_labels = np.append(total_labels, label_relations.numpy())
 
         report = get_report(total_predicted, total_labels)
         print(f'- Overall accuracy: {report["overall_accuracy"]:f}')
         print(f'- Average accuracy: {report["average_accuracy"]:f}')
         print(f'- Kappa coefficient: {report["kappa"]:f}')
 
-        if writer is not None:
-            # Accuracy per class
-            classes = range(9)
-            for i in classes:
-                labels_i = labels_pr == i
-                prediction_i = prediction_pr[:, i]
-                writer.add_pr_curve(str(i), labels_i, prediction_i, global_step=0)
-
     return report
-
-
-def original_test():
-    # datasets prepare
-    ''' img: array 3D; gt: array 2D;'''
-    img, gt, LABEL_VALUES, IGNORED_LABELS, RGB_BANDS, palette = get_dataset(DATASET, FOLDER)
-    # Number of classes + unidefind label
-    N_CLASSES = len(LABEL_VALUES) - 1
-    # Number of bands
-    N_BANDS = img.shape[-1]
-    # run the experiment several times
-    for run in range(N_RUNS):
-        # Sample get from training spectra
-        train_gt, test_gt = get_sample(DATASET, SAMPLE_SIZE, run)
-
-        ## test for all pixels
-        if PRE_ALL:
-            test_gt = np.ones_like(test_gt)
-
-        print("{} samples selected (over {})".format(np.count_nonzero(train_gt),
-                                                     np.count_nonzero(gt)))
-        print("Running an experiment with run {}/{}".format(run + 1, N_RUNS))
-        # for test
-        train_dataset = HyperX(img, train_gt, DATASET, PATCH_SIZE, False, False)
-        train_loader = Torchdata.DataLoader(train_dataset,
-                                            batch_size=N_CLASSES * SAMPLE_SIZE,
-                                            shuffle=False)
-        tr_data, tr_labels = train_loader.__iter__().next()
-        tr_data = tr_data.cuda(GPU)
-
-        test_dataset = HyperX(img, test_gt, DATASET, PATCH_SIZE, False, False)
-        test_loader = Torchdata.DataLoader(test_dataset,
-                                           batch_size=1,
-                                           shuffle=False)
-        # init neural networks
-
-        feature_encoder = CNNEncoder(N_BANDS, FEATURE_DIM)
-        relation_network = RelationNetwork(PATCH_SIZE, FEATURE_DIM)
-
-        # load weight from train
-        if CHECKPOINT_ENCODER is not None:
-            encoder_file = CHECKPOINT_ENCODER + 'non_augmentation_sample{}_run{}.pth'.format(SAMPLE_SIZE, run)
-            with torch.cuda.device(GPU):
-                feature_encoder.load_state_dict(torch.load(encoder_file))
-        else:
-            raise ('No Chenkpoints for Encoder Net')
-        if CHECKPOINT_RELATION is not None:
-            relation_file = CHECKPOINT_RELATION + 'non_augmentation_sample{}_run{}.pth'.format(SAMPLE_SIZE, run)
-            with torch.cuda.device(GPU):
-                relation_network.load_state_dict(torch.load(relation_file))
-        else:
-            raise ('No Chenkpoints for Relation Net')
-
-        feature_encoder.cuda(GPU)
-        relation_network.cuda(GPU)
-
-        print('Testing...')
-        feature_encoder.eval()
-        relation_network.eval()
-        accuracy, total = 0., 0.
-        # scores_all = np.zeros((len(test_loader),N_CLASSES))
-        test_labels = np.zeros(len(test_loader))
-        pre_labels = np.zeros(len(test_loader))
-        pad_pre_gt = np.zeros_like(test_dataset.label)
-        pad_test_indices = test_dataset.indices
-        for batch_idx, (te_data, te_labels) in tqdm(enumerate(test_loader), total=len(test_loader)):
-            with torch.no_grad():
-                te_data, te_labels = te_data.cuda(GPU), te_labels.cuda(GPU)
-                tr_features = feature_encoder(tr_data)
-                te_features = feature_encoder(te_data)
-                tr_features_ext = tr_features.unsqueeze(0)
-                te_features_ext = te_features.unsqueeze(0).repeat(N_CLASSES * SAMPLE_SIZE, 1, 1, 1, 1)
-                te_features_ext = torch.transpose(te_features_ext, 0, 1)
-                trte_pairs = torch.cat((tr_features_ext, te_features_ext), 2).view(-1, FEATURE_DIM * 2, PATCH_SIZE,
-                                                                                   PATCH_SIZE)
-                trte_relations = relation_network(trte_pairs).view(-1, SAMPLE_SIZE)
-                # scores = torch.mean(trte_relations,dim=1)
-                scores, _ = torch.max(trte_relations, dim=1)
-                # scores_all[batch_idx,:] = scores
-                _, output = torch.max(scores, dim=0)
-                pre_labels[batch_idx] = output.item() + 1
-                test_labels[batch_idx] = te_labels.item() + 1
-                pad_pre_gt[pad_test_indices[batch_idx]] = output.item() + 1
-                accuracy += output.item() == te_labels.item()
-                total += 1
-        rate = accuracy / total
-        print('Accuracy:', rate)
-        # save sores
-        results = dict()
-        results['OA'] = rate
-        results['gt'] = gt
-        results['test_gt'] = test_gt
-        results['train_gt'] = train_gt
-        p = PATCH_SIZE // 2
-        wp, hp = pad_pre_gt.shape
-        pre_gt = pad_pre_gt[p:wp - p, p:hp - p]
-        results['pre_gt'] = np.asarray(pre_gt, dtype='uint8')
-        if PRE_ALL:
-            results['pre_all'] = np.asarray(pre_gt, dtype='uint8')
-        results['test_labels'] = test_labels
-        results['pre_labels'] = pre_labels
-        # expand train_gt by superpxiel
-        save_folder = DATASET
-        save_result(results, save_folder, SAMPLE_SIZE, run)
 
 
 # Compute OA, AA and kappa from the results
@@ -226,7 +126,7 @@ def get_report(y_pr, y_gt):
     class_accuracy = metrics.precision_score(y_gt, y_pr, average=None)
     overall_accuracy = metrics.accuracy_score(y_gt, y_pr)
     average_accuracy = np.mean(class_accuracy)
-    kappa_coefficient = kappa(confusion_matrix, 5)
+    kappa_coefficient = kappa(confusion_matrix, 2)
 
     # Save report values
     report = {
