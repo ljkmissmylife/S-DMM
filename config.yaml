@@ -6,16 +6,15 @@ exec_folder: './experiments/'  # Folder where to keep all the experiment data
 split_folder: 'data_split/'  # Where to store dataset splits
 val_split: 0.1  # Fraction from the dataset used for validation [0, 1]
 train_split: 0.8  # Fraction from the dataset used for training [0, 1]
-train_batch_size: 9  # Batch size for every train iteration
-test_batch_size: 45  # Batch size for every test iteration
-sample_size: 5  # Window size for every sample/pixel input
-sample_bands: 100  # Number of bands after applying PCA
+train_batch_size: 50  # Batch size for every train iteration
+test_batch_size: 50  # Batch size for every test iteration
 generate_samples: True  # Whether the samples should be generated (False to load previously saved samples)
 max_samples: null  # max training samples per class (null for no limit)
 
 # Hyper parameters
+sample_size: 5  # Window size for every sample/pixel input
 num_runs: 10  # The amount of time the whole experiment should run
-num_epochs: 50  # Number of epochs per run
+num_epochs: 10  # Number of epochs per run
 learning_rate: 0.1  # Initial learning rate
 momentum: 0.9  # Momentum of optimizer
 weight_decay: 5e-4  # The weight decay for the optimizer
@@ -28,6 +27,5 @@ results_folder: 'results/'  # Folder where to write the validation and test resu
 checkpoint_folder: 'checkpoints/'  # Folder where to keep checkpoints
 checkpoint_file: null  # What checkpoint file to load (null for the latest)
 use_checkpoint: False  # Whether to load a checkpoint
-print_frequency: 40  # The amount of iterations between every step/loss print
+print_frequency: 80  # The amount of iterations between every step/loss print
 use_tensorboard: False  # Whether to use tensor boar for training information
-write_frequency: 20  # The amount of iterations between every tensorboard update
