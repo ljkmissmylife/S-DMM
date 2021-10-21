@@ -51,7 +51,7 @@ def test():
         # Load test ground truth and initialize test loader
         _, test_gt, _ = HSIData.load_samples(cfg.split_folder, cfg.train_split, cfg.val_split, run)
         test_dataset = SDMMDataset(data, test_gt, cfg.sample_size, data_augmentation=False)
-        test_loader = DataLoader(test_dataset, batch_size=cfg.test_batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=cfg.test_batch_size, shuffle=True)
 
         # Load model
         encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
