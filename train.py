@@ -111,10 +111,12 @@ def train():
             running_loss = loss_state
             running_correct = correct_state
 
+        # Enable GPU and multi-GPU training
+        criterion = nn.DataParallel(criterion).to(device)
+        encoder_model = nn.DataParallel(encoder_model).to(device)
+        relation_model = nn.DataParallel(relation_model).to(device)
+
         # Run epochs
-        criterion = criterion.to(device)
-        encoder_model = encoder_model.to(device)
-        relation_model = relation_model.to(device)
         total_steps = len(train_loader)
         for epoch in range(first_epoch, cfg.num_epochs):
             print("STARTING EPOCH {}/{}".format(epoch + 1, cfg.num_epochs))
