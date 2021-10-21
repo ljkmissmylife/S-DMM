@@ -232,6 +232,6 @@ def get_label_relations(labels1, labels2):
     relations = torch.zeros([length1, length2])
     for i, label1 in enumerate(labels1):
         for j, label2 in enumerate(labels2):
-            if label1 == label2:
+            if label1.item() == label2.item():
                 relations[i, j] = 1
     return relations
