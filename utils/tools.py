@@ -197,20 +197,6 @@ def save_results(filename, report, run, epoch=-1, validation=False):
         file.write('\n\n')
 
 
-# ORIGINAL save model
-# TODO: Remove this function and its uses
-def save_model(model, model_name, dataset_name, **kwargs):
-    model_dir = './checkpoints/' + model_name + "/" + dataset_name + "/"
-    if not os.path.isdir(model_dir):
-        os.makedirs(model_dir)  # dengbin:20181011
-    if isinstance(model, torch.nn.Module):
-        filename = "non_augmentation_sample{sample_size}_run{run}_epoch{epoch}_{metric:.2f}".format(**kwargs)
-        tqdm.write("Saving neural network weights in {}".format(filename))
-        torch.save(model.state_dict(), model_dir + filename + '.pth')
-        filename2 = "non_augmentation_sample{}_run{}".format(kwargs['sample_size'], kwargs['run'])
-        torch.save(model.state_dict(), model_dir + filename2 + '.pth')
-
-
 # Initialize networks weights
 def weights_init(m):
     classname = m.__class__.__name__
