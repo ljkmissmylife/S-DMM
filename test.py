@@ -64,10 +64,8 @@ def test():
         relation_model.eval()
 
         # Set model to device
-        encoder_model = nn.DataParallel(encoder_model)
-        relation_model = nn.DataParallel(relation_model)
-        encoder_model = encoder_model.to(device)
-        relation_model = relation_model.to(device)
+        encoder_model = nn.DataParallel(encoder_model).to(device)
+        relation_model = nn.DataParallel(relation_model).to(device)
 
         # Test model from the current run
         report = test_models(encoder_model, relation_model, test_loader, cfg.test_threshold)
