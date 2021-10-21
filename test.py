@@ -56,8 +56,10 @@ def test():
         # Load model
         encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
         relation_file = cfg.exec_folder + 'sdmm_relation_run_' + str(run) + '.pth'
-        encoder_model = CNNEncoder().load_state_dict(torch.load(encoder_file))
-        relation_model = RelationNetwork().load_state_dict(torch.load(relation_file))
+        encoder_model = CNNEncoder()
+        relation_model = RelationNetwork()
+        encoder_model.load_state_dict(torch.load(encoder_file))
+        relation_model.load_state_dict(torch.load(relation_file))
         encoder_model.eval()
         relation_model.eval()
 
