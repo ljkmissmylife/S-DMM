@@ -64,9 +64,8 @@ def test():
         relation_model.eval()
 
         # Set model to device
-        if device == 'cuda':
-            encoder_model = nn.DataParallel(encoder_model)
-            relation_model = nn.DataParallel(relation_model)
+        encoder_model = nn.DataParallel(encoder_model)
+        relation_model = nn.DataParallel(relation_model)
         encoder_model = encoder_model.to(device)
         relation_model = relation_model.to(device)
 
