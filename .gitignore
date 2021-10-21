@@ -1,6 +1,4 @@
 .idea
 __pycache__
-results/*
-checkpoints/*
-Datasets/*
-trainTestSplit/*
+experiments/*
+datasets/*
