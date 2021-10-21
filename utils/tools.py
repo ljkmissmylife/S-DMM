@@ -7,11 +7,9 @@ Created on Wed Oct 20 11:36 2021
 """
 
 import torch
-import torch.utils.data as Torchdata
 import numpy as np
 from scipy import io
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 import random
 import os
 import glob
@@ -201,7 +199,6 @@ def save_results(filename, report, run, epoch=-1, validation=False):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
         m.weight.data.normal_(0, 0.05)
         if m.bias is not None:
             m.bias.data.zero_()
