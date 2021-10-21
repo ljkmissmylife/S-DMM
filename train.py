@@ -73,7 +73,7 @@ def train():
 
         # Create train and test loaders
         train_loader = DataLoader(train_dataset, batch_size=cfg.train_batch_size, shuffle=True, num_workers=4)
-        val_loader = DataLoader(val_dataset, batch_size=cfg.test_batch_size, shuffle=False)
+        val_loader = DataLoader(val_dataset, batch_size=cfg.test_batch_size, shuffle=True)
 
         # Initialize neural networks
         encoder_model = CNNEncoder(data.image_bands, cfg.feature_dimensions)
