@@ -76,8 +76,10 @@ def train():
         val_loader = DataLoader(val_dataset, batch_size=cfg.test_batch_size, shuffle=True)
 
         # Initialize neural networks
-        encoder_model = nn.DataParallel(CNNEncoder(data.image_bands, cfg.feature_dimensions))
-        relation_model = nn.DataParallel(RelationNetwork(cfg.sample_size, cfg.feature_dimensions))
+        encoder_model = nn.DataParallel(CNNEncoder(data.image_bands, cfg.feature_dimensions),
+                                        device_ids=[0, 1])
+        relation_model = nn.DataParallel(RelationNetwork(cfg.sample_size, cfg.feature_dimensions),
+                                         device_ids=[0, 1])
 
         # Initialize weights
         encoder_model.apply(weights_init)
