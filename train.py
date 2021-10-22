@@ -76,8 +76,8 @@ def train():
         val_loader = DataLoader(val_dataset, batch_size=cfg.test_batch_size, shuffle=True)
 
         # Initialize neural networks
-        encoder_model = CNNEncoder(data.image_bands, cfg.feature_dimensions)
-        relation_model = RelationNetwork(cfg.sample_size, cfg.feature_dimensions)
+        encoder_model = nn.DataParallel(CNNEncoder(data.image_bands, cfg.feature_dimensions))
+        relation_model = nn.DataParallel(RelationNetwork(cfg.sample_size, cfg.feature_dimensions))
 
         # Initialize weights
         encoder_model.apply(weights_init)
@@ -113,8 +113,8 @@ def train():
 
         # Enable GPU and multi-GPU training
         criterion = criterion.to(device)
-        encoder_model = nn.DataParallel(encoder_model).to(device)
-        relation_model = nn.DataParallel(relation_model).to(device)
+        encoder_model = encoder_model.to(device)
+        relation_model = relation_model.to(device)
 
         # Run epochs
         total_steps = len(train_loader)
