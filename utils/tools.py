@@ -211,7 +211,7 @@ def weights_init(m):
 
 # Creates matrix of label relations based on two vectors
 def get_label_relations(labels1, labels2):
-    length1, length2 = len(labels1.squeeze()), len(labels2.squeeze())
+    length1, length2 = len(labels1), len(labels2)
     relations = torch.zeros([length1, length2])
     for i, label1 in enumerate(labels1):
         for j, label2 in enumerate(labels2):
