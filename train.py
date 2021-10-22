@@ -112,7 +112,7 @@ def train():
             running_correct = correct_state
 
         # Enable GPU and multi-GPU training
-        criterion = nn.DataParallel(criterion).to(device)
+        criterion = criterion.to(device)
         encoder_model = nn.DataParallel(encoder_model).to(device)
         relation_model = nn.DataParallel(relation_model).to(device)
 
