@@ -56,16 +56,12 @@ def test():
         # Load model
         encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
         relation_file = cfg.exec_folder + 'sdmm_relation_run_' + str(run) + '.pth'
-        encoder_model = CNNEncoder()
-        relation_model = RelationNetwork()
+        encoder_model = nn.DataParallel(CNNEncoder()).to(device)
+        relation_model = nn.DataParallel(RelationNetwork()).to(device)
         encoder_model.load_state_dict(torch.load(encoder_file))
         relation_model.load_state_dict(torch.load(relation_file))
         encoder_model.eval()
         relation_model.eval()
-
-        # Set model to device
-        encoder_model = nn.DataParallel(encoder_model).to(device)
-        relation_model = nn.DataParallel(relation_model).to(device)
 
         # Test model from the current run
         report = test_models(encoder_model, relation_model, test_loader, cfg.test_threshold)
