@@ -54,8 +54,8 @@ def test():
         test_loader = DataLoader(test_dataset, batch_size=cfg.test_batch_size, shuffle=True)
 
         # Load model
-        encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
-        relation_file = cfg.exec_folder + 'sdmm_relation_run_' + str(run) + '.pth'
+        encoder_file = cfg.exec_folder + 'runs/sdmm_encoder_run_' + str(run) + '.pth'
+        relation_file = cfg.exec_folder + 'runs/sdmm_relation_run_' + str(run) + '.pth'
         encoder_model = nn.DataParallel(CNNEncoder()).to(device)
         relation_model = nn.DataParallel(RelationNetwork()).to(device)
         encoder_model.load_state_dict(torch.load(encoder_file))

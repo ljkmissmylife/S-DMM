@@ -226,8 +226,8 @@ def train():
 
         # Save trained model
         # TODO: Save best models per run
-        encoder_file = cfg.exec_folder + 'sdmm_encoder_run_' + str(run) + '.pth'
-        relation_file = cfg.exec_folder + 'sdmm_relation_run_' + str(run) + '.pth'
+        encoder_file = cfg.exec_folder + 'runs/sdmm_encoder_run_' + str(run) + '.pth'
+        relation_file = cfg.exec_folder + 'runs/sdmm_relation_run_' + str(run) + '.pth'
         torch.save(encoder_model.state_dict(), encoder_file)
         torch.save(relation_model.state_dict(), relation_file)
         print(f'Finished training run {run + 1}')
