@@ -118,6 +118,12 @@ def train():
         encoder_model = encoder_model.to(device)
         relation_model = relation_model.to(device)
 
+        # Keep track of best models per run
+        # Save best models per run
+        run_best_model_e = None
+        run_best_model_r = None
+        run_best_accuracy = 0.0
+
         # Run epochs
         total_steps = len(train_loader)
         for epoch in range(first_epoch, cfg.num_epochs):
@@ -198,10 +204,15 @@ def train():
                 filename = cfg.results_folder + 'validations.txt'
                 save_results(filename, report, run, epoch, validation=True)
 
-                if report['overall_accuracy'] > best_models_dict['accuracy']:
-                    best_models_dict['encoder'] = encoder_model.state_dict()
-                    best_models_dict['relation'] = relation_model.state_dict()
-                    best_models_dict['accuracy'] = report['overall_accuracy']
+                if report['overall_accuracy'] > run_best_accuracy:
+                    run_best_accuracy = report['overall_accuracy']
+                    run_best_model_e = encoder_model.state_dict()
+                    run_best_model_r = relation_model.state_dict()
+
+                    if report['overall_accuracy'] > best_models_dict['accuracy']:
+                        best_models_dict['encoder'] = encoder_model.state_dict()
+                        best_models_dict['relation'] = relation_model.state_dict()
+                        best_models_dict['accuracy'] = report['overall_accuracy']
 
             # Save checkpoint
             checkpoint = {
@@ -225,11 +236,14 @@ def train():
         first_epoch = 0
 
         # Save trained model
-        # TODO: Save best models per run
-        encoder_file = cfg.exec_folder + 'runs/sdmm_encoder_run_' + str(run) + '.pth'
-        relation_file = cfg.exec_folder + 'runs/sdmm_relation_run_' + str(run) + '.pth'
+        encoder_file = f'{cfg.exec_folder}runs/sdmm_encoder_run_{run}.pth'
+        relation_file = f'{cfg.exec_folder}runs/sdmm_relation_run_{run}.pth'
+        best_encoder_file = f'{cfg.exec_folder}runs/sdmm_best_encoder_run_{run}.pth'
+        best_relation_file = f'{cfg.exec_folder}runs/sdmm_best_relation_run_{run}.pth'
         torch.save(encoder_model.state_dict(), encoder_file)
         torch.save(relation_model.state_dict(), relation_file)
+        torch.save(run_best_model_e, best_encoder_file)
+        torch.save(run_best_model_r, best_relation_file)
         print(f'Finished training run {run + 1}')
 
     # Save the best model
